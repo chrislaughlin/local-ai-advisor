@@ -68,6 +68,18 @@ pub fn print_recommendations(output: &RecommendationOutput, format: OutputFormat
         for warning in &output.warnings {
             println!("- {warning}");
         }
+        if output.hardware.available_ram_gb + 0.5 < output.hardware.safe_usable_memory_gb()
+            && !output.hardware.top_memory_processes.is_empty()
+        {
+            println!("- Top memory users you may want to close:");
+            for process in &output.hardware.top_memory_processes {
+                println!(
+                    "  - {} (PID {}): {:.1} GB",
+                    process.name, process.pid, process.memory_gb
+                );
+            }
+            println!("  Save your work and verify the process before terminating it; prefer quitting the app normally.");
+        }
     }
     Ok(())
 }

@@ -88,8 +88,10 @@ pub fn recommend(
 
     if hardware.available_ram_gb + 0.5 < safe_memory {
         warnings.push(format!(
-            "Only {:.1} GB is currently available. Close memory-heavy apps before loading a larger model.",
-            hardware.available_ram_gb
+            "Only {:.1} GB of {:.1} GB actual RAM is currently available ({:.1} GB in use). Close memory-heavy apps before loading a larger model.",
+            hardware.available_ram_gb,
+            hardware.total_ram_gb,
+            (hardware.total_ram_gb - hardware.available_ram_gb).max(0.0)
         ));
     }
     warnings.extend(hardware.warnings.clone());
@@ -338,6 +340,24 @@ mod tests {
             .avoided_models
             .iter()
             .any(|item| item.model.contains("14b")));
+    }
+
+    #[test]
+    fn low_memory_warning_reports_available_and_total_ram() {
+        let mut hardware = mock_profile(16.0, false, None);
+        hardware.available_ram_gb = 3.0;
+        let cache = CacheMetadata {
+            path: "test".into(),
+            status: "test".into(),
+            fetched_at: None,
+            stale: false,
+        };
+
+        let result = recommend(hardware, fallback_models(), UseCase::Chat, cache, vec![]);
+
+        assert!(result.warnings.iter().any(|warning| {
+            warning.contains("3.0 GB of 16.0 GB actual RAM") && warning.contains("13.0 GB in use")
+        }));
     }
 
     #[test]

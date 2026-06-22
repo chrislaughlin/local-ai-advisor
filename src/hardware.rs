@@ -3,6 +3,8 @@ use std::{env, fs, path::Path, process::Command, time::Duration};
 use serde::{Deserialize, Serialize};
 use sysinfo::{Disks, System};
 
+const TOP_MEMORY_PROCESS_LIMIT: usize = 5;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GpuInfo {
     pub name: String,
@@ -17,6 +19,13 @@ pub struct OllamaStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MemoryProcess {
+    pub pid: u32,
+    pub name: String,
+    pub memory_gb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HardwareProfile {
     pub os: String,
     pub cpu_model: String,
@@ -26,6 +35,7 @@ pub struct HardwareProfile {
     pub physical_cpu_cores: Option<usize>,
     pub total_ram_gb: f64,
     pub available_ram_gb: f64,
+    pub top_memory_processes: Vec<MemoryProcess>,
     pub disk_free_gb: f64,
     pub gpus: Vec<GpuInfo>,
     pub apple_silicon: bool,
@@ -93,6 +103,7 @@ pub async fn scan(client: &reqwest::Client) -> HardwareProfile {
             warnings.push("Could not parse /proc/meminfo; using sysinfo memory values.".into());
         }
     }
+    let top_memory_processes = top_memory_processes(&system, TOP_MEMORY_PROCESS_LIMIT);
 
     let disks = Disks::new_with_refreshed_list();
     let disk_free_gb = disks
@@ -130,6 +141,7 @@ pub async fn scan(client: &reqwest::Client) -> HardwareProfile {
         physical_cpu_cores: system.physical_core_count(),
         total_ram_gb: round1(total_ram_gb),
         available_ram_gb: round1(available_ram_gb),
+        top_memory_processes,
         disk_free_gb: round1(disk_free_gb),
         gpus,
         apple_silicon,
@@ -143,6 +155,28 @@ pub async fn scan(client: &reqwest::Client) -> HardwareProfile {
             .any(|name| executable_exists(name)),
         warnings,
     }
+}
+
+fn top_memory_processes(system: &System, limit: usize) -> Vec<MemoryProcess> {
+    let mut processes = system
+        .processes()
+        .values()
+        .filter(|process| process.memory() > 0)
+        .map(|process| MemoryProcess {
+            pid: process.pid().as_u32(),
+            name: process.name().to_string_lossy().into_owned(),
+            memory_gb: round1(bytes_to_gb(process.memory())),
+        })
+        .collect::<Vec<_>>();
+    processes.sort_by(|left, right| {
+        right
+            .memory_gb
+            .partial_cmp(&left.memory_gb)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.pid.cmp(&right.pid))
+    });
+    processes.truncate(limit);
+    processes
 }
 
 fn detect_gpus(warnings: &mut Vec<String>) -> Vec<GpuInfo> {
@@ -287,6 +321,7 @@ pub fn mock_profile(
         physical_cpu_cores: Some(8),
         total_ram_gb,
         available_ram_gb: total_ram_gb * 0.75,
+        top_memory_processes: vec![],
         disk_free_gb: 100.0,
         gpus: vram_gb
             .map(|vram| {
