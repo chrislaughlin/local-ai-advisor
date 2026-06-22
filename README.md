@@ -6,7 +6,26 @@ The project is deliberately advisory: it prints install commands but never downl
 
 ## Install
 
-Install a current stable Rust toolchain, then build or install from this checkout:
+Install with Homebrew:
+
+```bash
+brew tap chrislaughlin/tap
+brew trust --formula chrislaughlin/tap/local-ai-advisor # Homebrew 6+
+brew install local-ai-advisor
+```
+
+Or install it in one command:
+
+```bash
+brew install chrislaughlin/tap/local-ai-advisor
+```
+
+Homebrew 6 requires users to trust third-party formulae before installing. If
+the one-line command reports an untrusted tap, run
+`brew trust --formula chrislaughlin/tap/local-ai-advisor`, then repeat it.
+
+To build directly from source, install a current stable Rust toolchain, then
+build or install from this checkout:
 
 ```bash
 cargo build --release
@@ -98,3 +117,6 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
+
+Release and Homebrew maintenance instructions are in
+[`docs/homebrew-maintainer.md`](docs/homebrew-maintainer.md).
