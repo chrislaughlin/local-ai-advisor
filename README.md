@@ -1,8 +1,22 @@
 # local-ai-advisor
 
-`local-ai-advisor` inspects the current computer and recommends local LLMs that should realistically fit. It combines a small offline catalogue, cached public GGUF metadata from Hugging Face, and the models installed in Ollama. Hardware details and recommendation scoring stay on the machine.
+Stop guessing which model your laptop can run.
 
-The project is deliberately advisory: it prints install commands but never downloads, installs, or executes a model.
+`local-ai-advisor` scans your hardware, checks Ollama, and ranks local LLMs that fit your machine. Pick a use case and get a shortlist with memory estimates, expected speed, and the exact `ollama pull` command.
+
+```console
+$ local-ai-advisor recommend --use-case coding
+
+Recommended models for coding:
+
+1. qwen2.5-coder:7b
+   Expected performance: fast
+   Memory estimate: 5.5–7.0 GB
+   Why: Strong coding performance with enough memory left for your editor and tools.
+   Install: ollama pull qwen2.5-coder:7b
+```
+
+Your hardware profile and recommendation scores stay on your machine. The advisor prints install commands and leaves the pulling, benchmarking, and fan noise to you.
 
 ## Install
 
@@ -14,49 +28,58 @@ brew trust --formula chrislaughlin/tap/local-ai-advisor # Homebrew 6+
 brew install local-ai-advisor
 ```
 
-Or install it in one command:
+Or try the one-line install:
 
 ```bash
 brew install chrislaughlin/tap/local-ai-advisor
 ```
 
-Homebrew 6 requires users to trust third-party formulae before installing. If
-the one-line command reports an untrusted tap, run
-`brew trust --formula chrislaughlin/tap/local-ai-advisor`, then repeat it.
+Homebrew 6 asks you to trust third-party formulae. If the one-line command reports an untrusted tap, run `brew trust --formula chrislaughlin/tap/local-ai-advisor` and repeat the install.
 
-To build directly from source, install a current stable Rust toolchain, then
-build or install from this checkout:
+To build from source, install a current stable Rust toolchain and run:
 
 ```bash
 cargo build --release
 cargo install --path .
 ```
 
-The release binary is also available at `target/release/local-ai-advisor` after building.
+You can find the release binary at `target/release/local-ai-advisor` after the build.
 
-## Commands
+## Find your model
 
 ```bash
+# See what the advisor detects
 local-ai-advisor scan
-local-ai-advisor scan --format json
 
+# Get the default shortlist
 local-ai-advisor recommend
+
+# Optimize the ranking for your workload
 local-ai-advisor recommend --use-case coding
 local-ai-advisor recommend --use-case agent
 local-ai-advisor recommend --use-case reasoning
+
+# Control catalogue access
 local-ai-advisor recommend --online
 local-ai-advisor recommend --offline
-local-ai-advisor recommend --format json
 
+# Feed another tool or agent
+local-ai-advisor scan --format json
+local-ai-advisor recommend --format json
+```
+
+More commands:
+
+```bash
 local-ai-advisor catalog refresh
 local-ai-advisor catalog search qwen
 local-ai-advisor ollama
 local-ai-advisor explain
 ```
 
-`recommend` uses a fresh cache when possible and refreshes stale or missing public metadata. `--online` forces that refresh. `--offline` makes no public network requests and combines any existing cache with the built-in catalogue; querying the loopback Ollama API remains allowed.
+`recommend` uses fresh cached metadata when it can and refreshes stale or missing public metadata. `--online` forces a refresh. `--offline` skips public network requests and combines the existing cache with the built-in catalogue. It can still query Ollama on your machine.
 
-## Example
+## Sample hardware scan
 
 ```text
 Hardware summary:
@@ -65,50 +88,52 @@ Hardware summary:
 - Memory: 24.0 GB unified memory
 - Available memory: 15.0 GB
 - Ollama: installed and running
-
-Recommended models for coding:
-
-1. qwen2.5-coder:7b
-   Best for: coding, agent, reasoning
-   Expected performance: fast
-   Memory estimate: 5.5–7.0 GB
-   Why: A strong coding candidate that fits comfortably and leaves useful memory headroom.
-   Install: ollama pull qwen2.5-coder:7b
 ```
 
-Actual ordering changes with the machine, installed models, selected use case, and current catalogue.
+Rankings depend on your hardware, installed models, selected use case, and catalogue data.
 
-## How estimates work
+## The math behind the shortlist
 
-The advisor first reserves memory for the operating system and applications: 2 GB on machines with 8 GB or less, 4 GB around 16 GB, 6 GB around 24 GB, and 25% on machines with 32 GB or more. Apple Silicon RAM is treated as unified memory, with the same headroom reservation.
+The advisor reserves memory for your operating system and open apps before it ranks a model:
 
-For a GGUF with a known file size, minimum RAM is estimated as file size × 1.25 and recommended RAM as file size × 1.5. Otherwise it estimates model weights from parameter count and quantization—roughly 0.5 GB per billion parameters for Q4, 0.65 GB for Q5, or 1.1 GB for Q8—then adds 1–3 GB of runtime/context overhead.
+- 8 GB or less: 2 GB reserved
+- Around 16 GB: 4 GB reserved
+- Around 24 GB: 6 GB reserved
+- 32 GB or more: 25% reserved
 
-These figures are approximate. Context length, KV cache type, runner, GPU offload, prompt caching, thermals, and other open applications all affect real memory use and speed. “Fast”, “usable”, and “slow” are relative guidance, not benchmarks.
+It treats Apple Silicon RAM as unified memory and keeps the same headroom.
 
-## Ollama
+For a GGUF with a known file size, the advisor estimates minimum RAM at file size × 1.25 and recommended RAM at file size × 1.5. Without a file size, it estimates the weights from parameter count and quantization: about 0.5 GB per billion parameters for Q4, 0.65 GB for Q5, or 1.1 GB for Q8. It then adds 1–3 GB for runtime and context overhead.
 
-If Ollama is installed and its local API is reachable, local models receive a ranking boost. The tool only suggests commands:
+Treat those numbers as estimates. Context length, KV cache type, runner, GPU offload, prompt caching, thermals, and open applications change memory use and speed. The labels `fast`, `usable`, and `slow` offer relative guidance rather than benchmark results.
+
+## Ollama-aware ranking
+
+The advisor boosts models you have installed when it can reach the local Ollama API. It suggests pull commands such as:
 
 ```bash
 ollama pull qwen2.5-coder:7b
 ```
 
-It never runs a pull automatically. Public model names are validated before they can appear in a suggested shell command.
+You choose whether to run them. The advisor validates public model names before placing them in a shell command.
 
 ## Catalogue and cache
 
-The Hugging Face source searches popular public GGUF repositories and inspects GGUF filenames for parameter size and quantization. Public metadata is untrusted and is used only as data. The cache lives in the platform cache directory:
+The Hugging Face source searches popular public GGUF repositories and reads GGUF filenames for parameter size and quantization. The advisor treats public metadata as untrusted data.
+
+It stores the catalogue cache here:
 
 - macOS: `~/Library/Caches/local-ai-advisor/catalog.json`
-- Linux: `~/.cache/local-ai-advisor/catalog.json` (normally)
-- Windows: the user’s local cache directory
+- Linux: `~/.cache/local-ai-advisor/catalog.json` in a standard setup
+- Windows: your local cache directory
 
-Cache lifetime is 24 hours. A failed refresh falls back to stale cache data and then the built-in catalogue, so recommendation remains useful without connectivity.
+The cache lasts 24 hours. If a refresh fails, the advisor tries the stale cache, then the built-in catalogue. You still get recommendations without a connection.
 
 ## Privacy and safety
 
-Hardware scanning is local. Hardware details are not uploaded; public catalogue requests contain no hardware profile. Inspection uses read-only system APIs and optional fixed-argument commands such as `sysctl`, `system_profiler`, `lspci`, and `nvidia-smi`. User input is never interpolated into shell commands, downloaded model files are never executed, and all public HTTP operations are GET requests with timeouts.
+The scanner reads your hardware through local, read-only system APIs and fixed-argument commands such as `sysctl`, `system_profiler`, `lspci`, and `nvidia-smi`. It sends no hardware profile with public catalogue requests.
+
+The advisor does not interpolate user input into shell commands, execute downloaded model files, or make non-GET public HTTP requests. Network calls include timeouts.
 
 ## Development
 
@@ -118,5 +143,4 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Release and Homebrew maintenance instructions are in
-[`docs/homebrew-maintainer.md`](docs/homebrew-maintainer.md).
+See [`docs/homebrew-maintainer.md`](docs/homebrew-maintainer.md) for release and Homebrew maintenance instructions.
