@@ -48,6 +48,8 @@ pub fn print_recommendations(output: &RecommendationOutput, format: OutputFormat
             println!("   Install: {command}");
         } else if let Some(repo) = &item.model.repo_id {
             println!("   Source: https://huggingface.co/{repo}");
+            let quant_tag = item.model.quantization.as_deref().unwrap_or("Q4_K_M");
+            println!("   Install command: ollama run hf.co/{repo}:{quant_tag}");
         }
         println!();
     }
