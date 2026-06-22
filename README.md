@@ -1,5 +1,15 @@
 # local-ai-advisor
 
+```text
+       .--------.                                      .----------.
+      /  CPU   /|                                    /  7B Q4   /|
+     /------- / |       LOCAL AI ADVISOR            /----------/ |
+     |  RAM  |  +------> scan  score  rank -------->|   FAST   |  |
+     |       | /                                      |   FITS   | /
+     '-------'                                        '----------'
+          Your silicon. Your shortlist. No guesswork.
+```
+
 Stop guessing which model your laptop can run.
 
 `local-ai-advisor` scans your hardware, checks Ollama, and ranks local LLMs that fit your machine. Pick a use case and get a shortlist with memory estimates, expected speed, and the exact `ollama pull` command.
